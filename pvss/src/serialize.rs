@@ -78,7 +78,8 @@ impl Serialize for FrSerializable {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_newtype_struct("FrSerializable", &self.0.into_repr().to_string())
+        let s = "0x".to_string() + &self.0.into_repr().to_string().to_lowercase();
+        serializer.serialize_newtype_struct("FrSerializable", &s)
     }
 }
 
@@ -87,7 +88,8 @@ impl Serialize for FqSerializable {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_newtype_struct("FqSerializable", &self.0.into_repr().to_string())
+        let s = "0x".to_string() + &self.0.into_repr().to_string().to_lowercase();
+        serializer.serialize_newtype_struct("FqSerializable", &s)
     }
 }
 
@@ -97,8 +99,10 @@ impl Serialize for Fq2Serializable {
         S: serde::Serializer,
     {
         let mut state = serializer.serialize_struct("Fq2Serializable", 2)?;
-        state.serialize_field("c0", &self.0.c0.into_repr().to_string())?;
-        state.serialize_field("c1", &self.0.c1.into_repr().to_string())?;
+        let c0 = "0x".to_string() + &self.0.c0.into_repr().to_string().to_lowercase();
+        let c1 = "0x".to_string() + &self.0.c1.into_repr().to_string().to_lowercase();
+        state.serialize_field("c0", &c0)?;
+        state.serialize_field("c1", &c1)?;
         state.end()
     }
 }
@@ -197,9 +201,13 @@ impl<'de> Deserialize<'de> for FrSerializable {
             where
                 E: de::Error,
             {
+                if value.len() <= 2 || &value[..2] != "0x" {
+                    return Err(E::custom("Invalid hex string"));
+                }
+                let value = &value[2..];
                 if let Some(bytes) = hex::decode(value).ok() {
                     let fr = Fr::from_be_bytes_mod_order(bytes.as_slice());
-                    if fr.into_repr().to_string() != value {
+                    if fr.into_repr().to_string().to_lowercase() != value {
                         return Err(E::custom(format!(
                             "Hex value too large {} {} {:?}",
                             value,
@@ -236,9 +244,13 @@ impl<'de> Deserialize<'de> for FqSerializable {
             where
                 E: de::Error,
             {
+                if value.len() <= 2 || &value[..2] != "0x" {
+                    return Err(E::custom("Invalid hex string"));
+                }
+                let value = &value[2..];
                 if let Some(bytes) = hex::decode(value).ok() {
                     let fq = Fq::from_be_bytes_mod_order(bytes.as_slice());
-                    if fq.into_repr().to_string() != value {
+                    if fq.into_repr().to_string().to_lowercase() != value {
                         return Err(E::custom(format!(
                             "Hex value too large {} {} {:?}",
                             value,

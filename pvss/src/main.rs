@@ -120,6 +120,9 @@ fn main() {
 
             let decryption = decrypt_share(&ciphertext, &sk, i).unwrap();
             let decryption_serialized: G2AffineSerializable = decryption.into();
+            let output_file = Path::new(output_file.as_str());
+            let prefix = output_file.parent().unwrap();
+            fs::create_dir_all(prefix).unwrap();
             fs::write(
                 output_file,
                 serde_json::to_string(&decryption_serialized).unwrap(),
@@ -147,6 +150,9 @@ fn main() {
                 }).unzip();
             let result = combine_shares(&decrypted_shares, &indices).unwrap();
             let result_serialized: G2AffineSerializable = result.into();
+            let output_file = Path::new(output_file.as_str());
+            let prefix = output_file.parent().unwrap();
+            fs::create_dir_all(prefix).unwrap();
             fs::write(
                 output_file,
                 serde_json::to_string(&result_serialized).unwrap(),
