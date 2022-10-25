@@ -41,6 +41,23 @@ mod tests {
             combine_shares(&decrypted_shares, &indices_sample).unwrap();
         assert_eq!(decrypted_secret, pvss_secrets.h_f_0);
 
+        // Number of shares actually decrypted = t
+        let k = 5;
+        let indices_sample = (0..n).choose_multiple(&mut rng, k);
+        let decrypted_shares = indices_sample
+            .iter()
+            .map(|i| {
+                let share = decrypt_share(&pvss_ciphertext, &committee_sks[*i], *i).unwrap();
+                let share2 = share.clone();
+                verify_share(&pvss_config, &pvss_ciphertext, share2, *i).unwrap();
+                share
+            })
+            .collect::<Vec<_>>();
+
+        let decrypted_secret =
+            combine_shares(&decrypted_shares, &indices_sample).unwrap();
+        assert_eq!(decrypted_secret, pvss_secrets.h_f_0);
+
         // Number of shares actually decrypted <= t
         let k = 4;
         let indices_sample = (0..n).choose_multiple(&mut rng, k);

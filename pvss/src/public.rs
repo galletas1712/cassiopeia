@@ -44,7 +44,7 @@ pub fn verify<R: Rng>(
         let powers_of_alpha = {
             let mut current_alpha = Fr::one().neg();
             let mut powers = vec![];
-            for _ in 0..=pvss_config.t {
+            for _ in 0..pvss_config.t {
                 powers.push(current_alpha.into_repr());
                 current_alpha *= &alpha;
             }

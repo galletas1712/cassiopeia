@@ -1,7 +1,7 @@
 use ark_bn254::{Fq, Fq2, Fr, G1Affine, G2Affine};
 use ark_ff::PrimeField;
-use serde::de::{self, Deserializer, MapAccess, Visitor};
-use serde::ser::SerializeStruct;
+use serde::de::{self, Deserializer, SeqAccess, MapAccess, Visitor};
+use serde::ser::{SerializeStruct, SerializeTuple};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -98,11 +98,11 @@ impl Serialize for Fq2Serializable {
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("Fq2Serializable", 2)?;
+        let mut state = serializer.serialize_tuple(2)?;
         let c0 = "0x".to_string() + &self.0.c0.into_repr().to_string().to_lowercase();
         let c1 = "0x".to_string() + &self.0.c1.into_repr().to_string().to_lowercase();
-        state.serialize_field("c0", &c0)?;
-        state.serialize_field("c1", &c1)?;
+        state.serialize_element(&c0)?;
+        state.serialize_element(&c1)?;
         state.end()
     }
 }
@@ -269,13 +269,6 @@ impl<'de> Deserialize<'de> for FqSerializable {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(field_identifier, rename_all = "lowercase")]
-enum FQ2Field {
-    C0,
-    C1,
-}
-
 impl<'de> Deserialize<'de> for Fq2Serializable {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -290,30 +283,14 @@ impl<'de> Deserialize<'de> for Fq2Serializable {
                 formatter.write_str("struct Fq2Serializable")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Fq2Serializable, V::Error>
+            fn visit_seq<V>(self, mut seq: V) -> Result<Fq2Serializable, V::Error>
             where
-                V: MapAccess<'de>,
+                V: SeqAccess<'de>,
             {
-                let mut c0: Option<FqSerializable> = None;
-                let mut c1: Option<FqSerializable> = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        FQ2Field::C0 => {
-                            if c0.is_some() {
-                                return Err(de::Error::duplicate_field("c0"));
-                            }
-                            c0 = Some(map.next_value()?);
-                        }
-                        FQ2Field::C1 => {
-                            if c1.is_some() {
-                                return Err(de::Error::duplicate_field("c1"));
-                            }
-                            c1 = Some(map.next_value()?);
-                        }
-                    }
-                }
-                let c0: Fq = c0.ok_or_else(|| de::Error::missing_field("c0"))?.into();
-                let c1: Fq = c1.ok_or_else(|| de::Error::missing_field("c1"))?.into();
+                let c0: FqSerializable = seq.next_element::<FqSerializable>()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?.into();
+                let c1: FqSerializable = seq.next_element::<FqSerializable>()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?.into();
                 Ok(Fq2Serializable(Fq2::new(c0.into(), c1.into())))
             }
         }

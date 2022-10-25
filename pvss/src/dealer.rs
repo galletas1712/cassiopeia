@@ -10,7 +10,7 @@ pub fn distribute_secret(
     pvss_config: &PVSSConfig,
 ) -> Result<(PVSSCiphertext, PVSSSecrets), PVSSError> {
     let mut rng = thread_rng();
-    let f = (0..=pvss_config.t)
+    let f = (0..pvss_config.t)
         .map(|_| Fr::rand(&mut rng))
         .collect::<Vec<_>>();
     let y_eval_i = (1..=pvss_config.committee_pks.len())
