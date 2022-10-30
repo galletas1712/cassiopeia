@@ -101,8 +101,8 @@ impl Serialize for Fq2Serializable {
         let mut state = serializer.serialize_tuple(2)?;
         let c0 = "0x".to_string() + &self.0.c0.into_repr().to_string().to_lowercase();
         let c1 = "0x".to_string() + &self.0.c1.into_repr().to_string().to_lowercase();
+        state.serialize_element(&c1)?; // NOTE: Important! EIP-197 pairing expects reverse order!
         state.serialize_element(&c0)?;
-        state.serialize_element(&c1)?;
         state.end()
     }
 }
@@ -287,9 +287,10 @@ impl<'de> Deserialize<'de> for Fq2Serializable {
             where
                 V: SeqAccess<'de>,
             {
-                let c0: FqSerializable = seq.next_element::<FqSerializable>()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?.into();
+                // NOTE: Important! EIP-197 pairing expects reverse order!
                 let c1: FqSerializable = seq.next_element::<FqSerializable>()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?.into();
+                let c0: FqSerializable = seq.next_element::<FqSerializable>()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?.into();
                 Ok(Fq2Serializable(Fq2::new(c0.into(), c1.into())))
             }
