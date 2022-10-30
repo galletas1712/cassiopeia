@@ -22,7 +22,7 @@ mod tests {
         let pvss_config = PVSSConfig::new(pairing_config, committee_pks, t);
         let (pvss_ciphertext, pvss_secrets) = distribute_secret(&pvss_config).unwrap();
 
-        verify(&pvss_config, &pvss_ciphertext, &mut rng).unwrap();
+        verify(&pvss_config, &pvss_ciphertext).unwrap();
 
         // Number of shares actually decrypted > t
         let k = 6;
@@ -74,5 +74,16 @@ mod tests {
         let decrypted_secret =
             combine_shares(&decrypted_shares, &indices_sample).unwrap();
         assert_ne!(decrypted_secret, pvss_secrets.h_f_0);
+    }
+
+    #[test]
+    fn test_lagrange_coefficients() {
+        let mut rng = thread_rng();
+        let n = 7;
+        let alpha = Fr::rand(&mut rng);
+        let x = (1..=n)
+            .map(|i| Fr::from(i as i64))
+            .collect::<Vec<_>>();
+        assert_eq!(gen_lagrange_coefficients(x, alpha), gen_all_lagrange_coefficients(n, alpha));
     }
 }

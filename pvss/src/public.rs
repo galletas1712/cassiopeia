@@ -2,10 +2,45 @@ use crate::{errors::*, structs::*};
 use ark_bn254::{Bn254, Fr, G1Projective, G2Affine};
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
-use rand::Rng;
+use rand::thread_rng;
+use std::iter::once;
 use std::ops::Neg;
 
-fn gen_lagrange_coefficients(x: Vec<Fr>, alpha: Fr) -> Vec<Fr> {
+pub fn gen_all_lagrange_coefficients(n: usize, alpha: Fr) -> Vec<Fr> {
+    let numerator = (1..=n as i64)
+        .map(|x| alpha - Fr::from(x))
+        .reduce(|acc, item| acc * item)
+        .unwrap();
+    let pos = once(Fr::one())
+        .chain(
+            (1..n as i64)
+                .map(|x| Fr::from(x))
+                .scan(Fr::from(1), |state, x| {
+                    *state = *state * x;
+                    Some(*state)
+                }),
+        )
+        .collect::<Vec<_>>();
+    let neg = once(Fr::one())
+        .chain(
+            (1..n as i64)
+                .map(|x| Fr::from(x).neg())
+                .scan(Fr::from(1), |state, x| {
+                    *state = *state * x;
+                    Some(*state)
+                }),
+        )
+        .collect::<Vec<_>>();
+    (1..=n)
+        .map(|i| {
+            numerator
+                * (alpha - Fr::from(i as i64)).inverse().unwrap()
+                * (pos[i - 1] * neg[n - i]).inverse().unwrap()
+        })
+        .collect::<Vec<_>>()
+}
+
+pub fn gen_lagrange_coefficients(x: Vec<Fr>, alpha: Fr) -> Vec<Fr> {
     x.iter()
         .map(|x_i| {
             let mut coeff = Fr::one();
@@ -20,19 +55,12 @@ fn gen_lagrange_coefficients(x: Vec<Fr>, alpha: Fr) -> Vec<Fr> {
         .collect::<Vec<_>>()
 }
 
-pub fn verify<R: Rng>(
-    pvss_config: &PVSSConfig,
-    ciphertext: &PVSSCiphertext,
-    rng: &mut R,
-) -> Result<(), PVSSError> {
+pub fn verify(pvss_config: &PVSSConfig, ciphertext: &PVSSCiphertext) -> Result<(), PVSSError> {
     // Verify evaluations are correct probabilistically.
-    let alpha = Fr::rand(rng);
-    let lagrange_coefficients = gen_lagrange_coefficients(
-        (1..=pvss_config.committee_pks.len())
-            .map(|i| Fr::from(i as i64))
-            .collect::<Vec<_>>(),
-        alpha,
-    );
+    let mut rng = thread_rng();
+    let alpha = Fr::rand(&mut rng);
+    let lagrange_coefficients =
+        gen_all_lagrange_coefficients(pvss_config.committee_pks.len(), alpha);
 
     {
         let mut bases = vec![];
@@ -58,15 +86,6 @@ pub fn verify<R: Rng>(
         }
     }
 
-    // Verify same ratio. Need this for security proof.
-    // let pairs = [
-    //     (ciphertext.f_i[0].into(), self.pairing_config.u_1.into()),
-    //     (self.pairing_config.g.neg().into(), ciphertext.u_2.into()),
-    // ];
-    // if !E::product_of_pairings(pairs.iter()).is_one() {
-    //     return Err(PVSSError::RatioIncorrect);
-    // }
-
     let powers_of_alpha = {
         let mut current_alpha = Fr::one();
         let mut powers = vec![];
@@ -77,7 +96,7 @@ pub fn verify<R: Rng>(
         powers
     };
 
-    // NOTE: need -g because we check e(g, ...) = e(..., ...) -> e(..., ...) / e(-g, ...) = 1
+    // NOTE: need -g because we check e(g, ...) = e(..., ...) -> e(..., ...) / e(g, ...) = 1 -> e(..., ...) * e(-g, ...) = 1
     let (batched_a_i, batched_g_neg) = {
         let g_neg = pvss_config.pairing_config.g.neg();
         let batched_a_i = ciphertext
