@@ -1,16 +1,21 @@
 use ark_bn254::{Fq, Fq2, Fr, G1Affine, G2Affine};
 use ark_ff::PrimeField;
-use serde::de::{self, Deserializer, SeqAccess, MapAccess, Visitor};
+use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{SerializeStruct, SerializeTuple};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::structs::{PVSSCiphertext, PVSSSecrets};
 
+#[derive(Copy, Clone)]
 pub struct FrSerializable(Fr);
+#[derive(Copy, Clone)]
 pub struct FqSerializable(Fq);
+#[derive(Copy, Clone)]
 pub struct Fq2Serializable(Fq2);
+#[derive(Copy, Clone)]
 pub struct G1AffineSerializable(G1Affine);
+#[derive(Copy, Clone)]
 pub struct G2AffineSerializable(G2Affine);
 
 impl From<Fr> for FrSerializable {
@@ -288,10 +293,14 @@ impl<'de> Deserialize<'de> for Fq2Serializable {
                 V: SeqAccess<'de>,
             {
                 // NOTE: Important! EIP-197 pairing expects reverse order!
-                let c1: FqSerializable = seq.next_element::<FqSerializable>()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?.into();
-                let c0: FqSerializable = seq.next_element::<FqSerializable>()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?.into();
+                let c1: FqSerializable = seq
+                    .next_element::<FqSerializable>()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?
+                    .into();
+                let c0: FqSerializable = seq
+                    .next_element::<FqSerializable>()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?
+                    .into();
                 Ok(Fq2Serializable(Fq2::new(c0.into(), c1.into())))
             }
         }

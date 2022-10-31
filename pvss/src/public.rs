@@ -55,7 +55,10 @@ pub fn gen_lagrange_coefficients(x: Vec<Fr>, alpha: Fr) -> Vec<Fr> {
         .collect::<Vec<_>>()
 }
 
-pub fn verify(pvss_config: &PVSSConfig, ciphertext: &PVSSCiphertext) -> Result<(), PVSSError> {
+pub fn verify_ciphertext(
+    pvss_config: &PVSSConfig,
+    ciphertext: &PVSSCiphertext,
+) -> Result<(), PVSSError> {
     // Verify evaluations are correct probabilistically.
     let mut rng = thread_rng();
     let alpha = Fr::rand(&mut rng);

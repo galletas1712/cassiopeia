@@ -3,15 +3,15 @@ use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::{PrimeField, UniformRand};
 use clap::{Parser, Subcommand};
 use rand::thread_rng;
-use std::{fs, path::Path};
-use walkdir::WalkDir;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{fs, io};
 
 use cassiopeia::{
     committee::decrypt_share,
     dealer::distribute_secret,
-    public::combine_shares,
+    public::{combine_shares, verify_ciphertext},
     serialize::*,
-    structs::{PVSSCiphertext, PVSSConfig, PairingConfig},
+    structs::{PVSSCiphertext, PVSSConfig, PVSSSecrets, PairingConfig},
 };
 
 #[derive(Parser, Debug)]
@@ -24,140 +24,142 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     #[command(arg_required_else_help = true)]
-    GenKeys {
-        n: usize,
-        sk_dir: String,
-        pk_file: String,
-    },
+    GenKeys { n: usize },
     #[command(arg_required_else_help = true)]
-    DealSecret {
-        t: usize,
-        pk_file: String,
-        ciphertext_file: String,
-        secrets_file: String,
-    },
-    #[command(arg_required_else_help = true)]
-    DecryptShare {
-        ciphertext_file: String,
-        sk_file: String,
-        i: usize,
-        output_file: String,
-    },
-    #[command(arg_required_else_help = true)]
-    CombineShares {
-        shares_dir: String,
-        output_file: String,
-    },
+    DealSecret { t: usize },
+    #[command()]
+    DecryptShare,
+    #[command()]
+    CombineShares,
+    #[command()]
+    VerifyCiphertext,
 }
 
-fn gen_keys(pairing_config: &PairingConfig, n: usize) -> (Vec<Fr>, Vec<G2Affine>) {
+#[derive(Serialize)]
+struct GenKeysOutput {
+    sks: Vec<FrSerializable>,
+    pks: Vec<G2AffineSerializable>,
+}
+
+#[derive(Serialize)]
+struct DealSecretOutput {
+    ciphertext: PVSSCiphertext,
+    secrets: PVSSSecrets,
+}
+
+#[derive(Deserialize)]
+struct DecryptShareInput {
+    i: usize,
+    ciphertext: PVSSCiphertext,
+    sk: FrSerializable,
+}
+
+#[derive(Deserialize)]
+struct CombineSharesInputElem {
+    i: usize,
+    share: G2AffineSerializable,
+}
+
+#[derive(Deserialize)]
+struct VerifyCiphertextInput {
+    t: usize,
+    pks: Vec<G2AffineSerializable>,
+    ciphertext: PVSSCiphertext,
+}
+
+fn gen_keys(pairing_config: &PairingConfig, n: usize) -> GenKeysOutput {
     let mut rng = thread_rng();
     let sks = (0..n).map(|_| Fr::rand(&mut rng)).collect::<Vec<_>>();
     let pks = sks
         .iter()
         .map(|sk| pairing_config.h.mul(sk.into_repr()).into_affine())
         .collect::<Vec<_>>();
-    (sks, pks)
+    let sks_serializable = sks
+        .iter()
+        .map(|sk: &Fr| (*sk).into())
+        .collect::<Vec<FrSerializable>>();
+    let pks_serializable = pks
+        .iter()
+        .map(|pk: &G2Affine| (*pk).into())
+        .collect::<Vec<G2AffineSerializable>>();
+    GenKeysOutput {
+        sks: sks_serializable,
+        pks: pks_serializable,
+    }
 }
 
-fn main() {
+fn read_obj<T: DeserializeOwned>() -> Result<T, io::Error> {
+    let mut raw = String::new();
+    io::stdin().read_line(&mut raw)?;
+    let deserializable: T = serde_json::from_str(raw.as_str())?;
+    Ok(deserializable.into())
+}
+
+fn deserialize_vec<T: DeserializeOwned, S>(a: Vec<T>) -> Vec<S>
+where
+    T: Into<S>,
+{
+    a.into_iter().map(|elem: T| elem.into()).collect::<Vec<S>>()
+}
+
+fn main() -> Result<(), io::Error> {
+    // TODO: fix error handling
     let args = Cli::parse();
     let pairing_config = PairingConfig::new();
 
     match args.command {
-        Commands::GenKeys { n, sk_dir, pk_file } => {
-            let (sks, pks) = gen_keys(&pairing_config, n);
-            let sks_serializable = sks
-                .iter()
-                .map(|sk: &Fr| (*sk).into())
-                .collect::<Vec<FrSerializable>>();
-            let pks_serializable = pks
-                .iter()
-                .map(|pk: &G2Affine| (*pk).into())
-                .collect::<Vec<G2AffineSerializable>>();
-
-            fs::create_dir_all(&sk_dir).unwrap();
-            for (i, sk) in sks_serializable.iter().enumerate() {
-                let sk_file = Path::new(&sk_dir.as_str()).join(i.to_string());
-                fs::write(sk_file, serde_json::to_string(&sk).unwrap()).unwrap();
-            }
-            fs::write(pk_file, serde_json::to_string(&pks_serializable).unwrap()).unwrap();
+        Commands::GenKeys { n } => {
+            let all_keys = gen_keys(&pairing_config, n);
+            println!("{}", serde_json::to_string(&all_keys)?);
+            Ok(())
         }
-        Commands::DealSecret {
-            t,
-            pk_file,
-            ciphertext_file,
-            secrets_file,
-        } => {
-            let pks_raw = fs::read_to_string(pk_file).unwrap();
-            let pks_serializable: Vec<G2AffineSerializable> =
-                serde_json::from_str(pks_raw.as_str()).unwrap();
-            let pks = pks_serializable
-                .into_iter()
-                .map(|pk: G2AffineSerializable| pk.into())
-                .collect::<Vec<G2Affine>>();
+        Commands::DealSecret { t } => {
+            let pks = deserialize_vec::<G2AffineSerializable, G2Affine>(read_obj::<
+                Vec<G2AffineSerializable>,
+            >()?);
             let pvss_config = PVSSConfig::new(pairing_config, pks, t);
-            let (pvss_ciphertext, pvss_secrets) = distribute_secret(&pvss_config).unwrap();
-            fs::write(
-                ciphertext_file,
-                serde_json::to_string(&pvss_ciphertext).unwrap(),
-            )
-            .unwrap();
-            fs::write(secrets_file, serde_json::to_string(&pvss_secrets).unwrap()).unwrap();
+            let (ciphertext, secrets) = distribute_secret(&pvss_config).unwrap();
+            let output = DealSecretOutput {
+                ciphertext,
+                secrets,
+            };
+            println!("{}", serde_json::to_string(&output)?);
+            Ok(())
         }
-        Commands::DecryptShare {
-            ciphertext_file,
-            sk_file,
-            i,
-            output_file,
-        } => {
-            let ciphertext_raw = fs::read_to_string(ciphertext_file).unwrap();
-            let ciphertext: PVSSCiphertext = serde_json::from_str(ciphertext_raw.as_str()).unwrap();
-
-            let sk_raw = fs::read_to_string(sk_file).unwrap();
-            let sk_serializable: FrSerializable = serde_json::from_str(sk_raw.as_str()).unwrap();
-            let sk: Fr = sk_serializable.into();
-
-            let decryption = decrypt_share(&ciphertext, &sk, i).unwrap();
-            let decryption_serialized: G2AffineSerializable = decryption.into();
-            let output_file = Path::new(output_file.as_str());
-            let prefix = output_file.parent().unwrap();
-            fs::create_dir_all(prefix).unwrap();
-            fs::write(
-                output_file,
-                serde_json::to_string(&decryption_serialized).unwrap(),
-            )
-            .unwrap();
+        Commands::DecryptShare => {
+            // TODO: verify share, deserialization is ugly
+            let input = read_obj::<DecryptShareInput>()?;
+            let decrypted_share: G2AffineSerializable =
+                decrypt_share(&input.ciphertext, &input.sk.into(), input.i)
+                    .unwrap()
+                    .into(); // TODO: fix!
+            println!("{}", serde_json::to_string(&decrypted_share)?);
+            Ok(())
         }
-        Commands::CombineShares {
-            shares_dir,
-            output_file,
-        } => {
-            let (indices, decrypted_shares): (Vec<usize>, Vec<G2Affine>) = WalkDir::new(shares_dir)
-                .into_iter()
-                .filter_map(|f| f.ok())
-                .filter_map(|f| {
-                    let file_name_str: String = f.file_name().to_str().unwrap().to_string();
-                    if let Some(i) = file_name_str.parse::<usize>().ok() {
-                        let share_raw = fs::read_to_string(f.path()).unwrap();
-                        let share_serializable: G2AffineSerializable =
-                            serde_json::from_str(share_raw.as_str()).unwrap();
-                        let share: G2Affine = share_serializable.into();
-                        return Some((i, share));
-                    } else {
-                        return None;
-                    }
-                }).unzip();
-            let result = combine_shares(&decrypted_shares, &indices).unwrap();
-            let result_serialized: G2AffineSerializable = result.into();
-            let output_file = Path::new(output_file.as_str());
-            let prefix = output_file.parent().unwrap();
-            fs::create_dir_all(prefix).unwrap();
-            fs::write(
-                output_file,
-                serde_json::to_string(&result_serialized).unwrap(),
-            )
-            .unwrap();
+        Commands::CombineShares => {
+            let input = read_obj::<Vec<CombineSharesInputElem>>()?;
+            let (indices, decrypted_shares): (Vec<usize>, Vec<G2Affine>) = input
+                .iter()
+                .map(|elem| (elem.i, elem.share.into()))
+                .unzip::<usize, G2Affine, Vec<usize>, Vec<G2Affine>>();
+            let result: G2AffineSerializable =
+                combine_shares(&decrypted_shares, &indices).unwrap().into(); // TODO: fix!
+            println!("{}", serde_json::to_string(&result)?);
+            Ok(())
+        }
+        Commands::VerifyCiphertext => {
+            // TODO: deserialization is ugly
+            let input = read_obj::<VerifyCiphertextInput>()?;
+            let pks = deserialize_vec::<G2AffineSerializable, G2Affine>(input.pks);
+            println!(
+                "{}",
+                verify_ciphertext(
+                    &PVSSConfig::new(pairing_config, pks, input.t),
+                    &input.ciphertext
+                )
+                .is_ok()
+            );
+            Ok(())
         }
     }
 }
