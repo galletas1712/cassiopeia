@@ -4,7 +4,7 @@ use ark_ff::{PrimeField, UniformRand};
 use clap::{Parser, Subcommand};
 use rand::thread_rng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::io;
+use std::{error::Error, io};
 
 use cassiopeia::{
     committee::decrypt_share,
@@ -23,14 +23,19 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Generates n secret key and public key pairs
     #[command(arg_required_else_help = true)]
     GenKeys { n: usize },
+    /// Generates PVSS ciphertext and secrets for threshold t
     #[command(arg_required_else_help = true)]
     DealSecret { t: usize },
+    /// Decrypts a share at a specified index in the ciphertext with a secret key
     #[command()]
     DecryptShare,
+    /// Combines decrypted shares to produce a secret
     #[command()]
     CombineShares,
+    /// Verifies PVSS ciphertext
     #[command()]
     VerifyCiphertext,
 }
@@ -102,7 +107,7 @@ where
     a.into_iter().map(|elem: T| elem.into()).collect::<Vec<S>>()
 }
 
-fn main() -> Result<(), io::Error> {
+fn main() -> Result<(), Box<dyn Error>> {
     // TODO: fix error handling
     let args = Cli::parse();
     let pairing_config = PairingConfig::new();
@@ -127,12 +132,9 @@ fn main() -> Result<(), io::Error> {
             Ok(())
         }
         Commands::DecryptShare => {
-            // TODO: verify share, deserialization is ugly
             let input = read_obj::<DecryptShareInput>()?;
             let decrypted_share: G2AffineSerializable =
-                decrypt_share(&input.ciphertext, &input.sk.into(), input.i)
-                    .unwrap()
-                    .into(); // TODO: fix!
+                decrypt_share(&input.ciphertext, &input.sk.into(), input.i)?.into();
             println!("{}", serde_json::to_string(&decrypted_share)?);
             Ok(())
         }
@@ -142,13 +144,11 @@ fn main() -> Result<(), io::Error> {
                 .iter()
                 .map(|elem| (elem.i, elem.share.into()))
                 .unzip::<usize, G2Affine, Vec<usize>, Vec<G2Affine>>();
-            let result: G2AffineSerializable =
-                combine_shares(&decrypted_shares, &indices).unwrap().into(); // TODO: fix!
+            let result: G2AffineSerializable = combine_shares(&decrypted_shares, &indices)?.into();
             println!("{}", serde_json::to_string(&result)?);
             Ok(())
         }
         Commands::VerifyCiphertext => {
-            // TODO: deserialization is ugly
             let input = read_obj::<VerifyCiphertextInput>()?;
             let pks = deserialize_vec::<G2AffineSerializable, G2Affine>(input.pks);
             println!(

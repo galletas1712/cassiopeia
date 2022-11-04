@@ -10,8 +10,7 @@ mod tests {
     #[test]
     fn share_secret() {
         let mut rng = thread_rng();
-        let n: usize = 10; // TODO: test with non-powers of 2 (might not be able to use
-                           // Radix2EvaluationDomain)
+        let n: usize = 10;
         let t: usize = 5;
         let pairing_config = PairingConfig::new();
         let committee_sks = (1..=n).map(|_| Fr::rand(&mut rng)).collect::<Vec<_>>();
