@@ -33,7 +33,7 @@ impl PairingConfig {
 
 impl PVSSConfig {
     pub fn new(pairing_config: PairingConfig, committee_pks: Vec<G2Affine>, t: usize) -> Self {
-        assert!(t < committee_pks.len());
+        assert!(t <= committee_pks.len());
         PVSSConfig {
             pairing_config,
             committee_pks,

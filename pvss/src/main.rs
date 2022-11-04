@@ -4,7 +4,7 @@ use ark_ff::{PrimeField, UniformRand};
 use clap::{Parser, Subcommand};
 use rand::thread_rng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{fs, io};
+use std::io;
 
 use cassiopeia::{
     committee::decrypt_share,
