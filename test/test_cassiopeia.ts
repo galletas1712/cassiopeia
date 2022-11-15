@@ -88,9 +88,9 @@ describe("Cassiopeia", () => {
 
     it("Should pass verification check for valid secret sharing", async () => {
       const { all_keys, cassiopeia } = await loadFixture(deployFixture);
-      testShareValidSecret(all_keys, cassiopeia, 0);
-      testShareValidSecret(all_keys, cassiopeia, 1);
-      testShareValidSecret(all_keys, cassiopeia, 2);
+      await testShareValidSecret(all_keys, cassiopeia, 0);
+      await testShareValidSecret(all_keys, cassiopeia, 1);
+      await testShareValidSecret(all_keys, cassiopeia, 2);
     });
   });
 });
