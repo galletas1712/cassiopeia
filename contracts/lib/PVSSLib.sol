@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import "./alt_bn128.sol";
+import "./ec/alt_bn128.sol";
 
 library PVSSLib {
     struct PVSSCiphertext {
