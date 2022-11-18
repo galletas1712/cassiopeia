@@ -30,7 +30,7 @@ describe("PVSS CLI", () => {
     for (let numRevealed = 0; numRevealed <= n; numRevealed++) {
       const decryptedSecret = JSON.parse(
         execFileSync(BINARY, ["combine-shares"], {
-          input: JSON.stringify(decryptedShares.slice(0, numRevealed + 1)),
+          input: JSON.stringify(decryptedShares.slice(0, numRevealed)),
         }).toString()
       );
       if (numRevealed < t) {
@@ -44,5 +44,6 @@ describe("PVSS CLI", () => {
   it("Should recover a valid secret if and only if number of revealed shares >= t", () => {
     const n = Math.floor(Math.random() * 25) + 1;
     const t = Math.floor(Math.random() * n) + 1; // Between 1 and n inclusive
+    testRunEndToEnd(n, t);
   });
 });
