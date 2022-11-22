@@ -5,7 +5,7 @@ import { expect } from "chai";
 import { G2PointStruct } from "../typechain-types/lib/PVSSLib";
 import { BigNumber, Contract } from "ethers";
 import { defaultAbiCoder, keccak256 } from "ethers/lib/utils";
-import { readFileSync, writeFileSync } from "fs";
+import { createWriteStream, readFileSync, writeFileSync } from "fs";
 
 const snarkjs = require("snarkjs");
 const wc = require("../zkp/output/cassiopeia_js/witness_calculator");
@@ -16,6 +16,37 @@ const CIRCUIT_ZKEY = "zkp/output/keys/cassiopeia_final.zkey";
 const CIRCUIT_VKEY = "zkp/output/keys/verification_key.json";
 
 type AllKeys = { sks: [BigNumber]; pks: [G2PointStruct] };
+
+const deploy = async (n: number, t: number) => {
+  const all_keys: AllKeys = JSON.parse(
+    execFileSync(BINARY, ["gen-keys", n.toString()]).toString()
+  );
+  const PairingLib = await ethers
+    .getContractFactory("PairingLib")
+    .then((factory) => factory.deploy());
+  const PVSSLib = await ethers
+    .getContractFactory("PVSSLib", {
+      libraries: {
+        PairingLib: PairingLib.address,
+      },
+    })
+    .then((factory) => factory.deploy());
+  const PlonkVerifier = await ethers
+    .getContractFactory("PlonkVerifier")
+    .then((factory) => factory.deploy());
+  const SNARKVerifyLib = await ethers
+    .getContractFactory("SNARKVerifyLib")
+    .then((factory) => factory.deploy());
+  const Cassiopeia = await ethers
+    .getContractFactory("Cassiopeia", {
+      libraries: {
+        PVSSLib: PVSSLib.address,
+        SNARKVerifyLib: SNARKVerifyLib.address,
+      },
+    })
+    .then((factory) => factory.deploy(t, all_keys.pks, PlonkVerifier.address));
+  return { all_keys, cassiopeia: Cassiopeia };
+};
 
 const genConcat = (unlockTime: any, pvss_output: any) => {
   const concat = keccak256(
@@ -32,7 +63,6 @@ const genConcat = (unlockTime: any, pvss_output: any) => {
 };
 
 const genSNARKVerifierCall = async (
-  unlockTime: any,
   pvss_output: any,
   concatHalves: string[]
 ) => {
@@ -66,45 +96,67 @@ const genSNARKVerifierCall = async (
 };
 
 describe("Cassiopeia", () => {
-  const n = Math.floor(Math.random() * 25) + 1;
-  const t = Math.floor(Math.random() * n) + 1; // Between 1 and n inclusive
+  const genValidSecret = (all_keys: AllKeys, t: number) =>
+    JSON.parse(
+      execFileSync(BINARY, ["deal-secret", t.toString()], {
+        input: JSON.stringify(all_keys.pks),
+      }).toString()
+    );
 
   const deployFixture = async () => {
-    const all_keys: AllKeys = JSON.parse(
-      execFileSync(BINARY, ["gen-keys", n.toString()]).toString()
-    );
-    const PairingLib = await ethers
-      .getContractFactory("PairingLib")
-      .then((factory) => factory.deploy());
-    const PVSSLib = await ethers
-      .getContractFactory("PVSSLib", {
-        libraries: {
-          PairingLib: PairingLib.address,
+      const n = Math.floor(Math.random() * 25) + 1;
+      const t = Math.floor(Math.random() * n) + 1; // Between 1 and n inclusive
+
+      const result = await deploy(n, t);
+      return {n, t, all_keys: result.all_keys, cassiopeia: result.cassiopeia};
+  }
+
+  const testShareValidSecret = async (
+    n: number,
+    t: number,
+    all_keys: AllKeys,
+    cassiopeia: Contract,
+    secretID: number
+  ) => {
+    const pvss_output = genValidSecret(all_keys, t);
+    const unlockTime = BigNumber.from(ethers.utils.randomBytes(32));
+    const concatHalves = genConcat(unlockTime, pvss_output);
+
+    const { proof, pubSignals, proofCalldata, pubSignalsCalldata } =
+      await genSNARKVerifierCall(pvss_output, concatHalves);
+    const vKey = JSON.parse(readFileSync(CIRCUIT_VKEY).toString());
+    expect(await snarkjs.plonk.verify(vKey, pubSignals, proof)).to.be.true;
+
+    const receipt = await (
+      await cassiopeia.shareSecret(
+        unlockTime,
+        pvss_output.ciphertext,
+        {
+          hashCmt: pubSignalsCalldata[0],
+          babyJubCmt: [pubSignalsCalldata[1], pubSignalsCalldata[2]],
         },
-      })
-      .then((factory) => factory.deploy());
-    const PlonkVerifier = await ethers
-      .getContractFactory("PlonkVerifier")
-      .then((factory) => factory.deploy());
-    const SNARKVerifyLib = await ethers
-      .getContractFactory("SNARKVerifyLib")
-      .then((factory) => factory.deploy());
-    const Cassiopeia = await ethers
-      .getContractFactory("Cassiopeia", {
-        libraries: {
-          PVSSLib: PVSSLib.address,
-          SNARKVerifyLib: SNARKVerifyLib.address,
-        },
-      })
-      .then((factory) =>
-        factory.deploy(t, all_keys.pks, PlonkVerifier.address)
-      );
-    return { all_keys, cassiopeia: Cassiopeia };
+        proofCalldata
+      )
+    ).wait();
+    expect(receipt.events?.length).to.equal(1);
+
+    const reportedSecretID = receipt.events?.at(0)?.args?.secretID;
+    expect(reportedSecretID).to.equal(secretID);
+    const secret = await cassiopeia.getSecret(secretID);
+    expect(secret.unlockTime).to.equal(unlockTime);
+    expect(secret.a_i.length).to.equal(n);
+    for (let i = 0; i < n; i++) {
+      expect(secret.a_i[i][0]).to.equal(pvss_output.ciphertext.a_i[i].x);
+      expect(secret.a_i[i][1]).to.equal(pvss_output.ciphertext.a_i[i].y);
+    }
+    expect(secret.decryptedShares.length).to.equal(0);
+
+    return receipt.gasUsed.toString();
   };
 
   describe("Deployment", () => {
     it("Should set the right parameters at initialization", async () => {
-      const { all_keys, cassiopeia } = await loadFixture(deployFixture);
+      const {n, t, all_keys, cassiopeia } = await loadFixture(deployFixture);
       expect(await cassiopeia.n()).to.equal(n);
       expect(await cassiopeia.t()).to.equal(t);
       for (let i = 0; i < n; i++) {
@@ -119,59 +171,28 @@ describe("Cassiopeia", () => {
   });
 
   describe("Secret sharing", () => {
-    const genValidSecret = (all_keys: AllKeys) =>
-      JSON.parse(
-        execFileSync(BINARY, ["deal-secret", t.toString()], {
-          input: JSON.stringify(all_keys.pks),
-        }).toString()
-      );
-
-    const testShareValidSecret = async (
-      all_keys: AllKeys,
-      cassiopeia: Contract,
-      secretID: number
-    ) => {
-      const pvss_output = genValidSecret(all_keys);
-      const unlockTime = BigNumber.from(ethers.utils.randomBytes(32));
-      const concatHalves = genConcat(unlockTime, pvss_output);
-
-      const { proof, pubSignals, proofCalldata, pubSignalsCalldata } =
-        await genSNARKVerifierCall(unlockTime, pvss_output, concatHalves);
-      const vKey = JSON.parse(readFileSync(CIRCUIT_VKEY).toString());
-      expect(await snarkjs.plonk.verify(vKey, pubSignals, proof)).to.be.true;
-
-      const receipt = await (
-          await cassiopeia.shareSecret(
-            unlockTime,
-            pvss_output.ciphertext,
-            {
-              hashCmt: pubSignalsCalldata[0],
-              babyJubCmt: [pubSignalsCalldata[1], pubSignalsCalldata[2]],
-            },
-            proofCalldata,
-          )
-        ).wait()
-      expect(receipt.events?.length).to.equal(1);
-      const reportedSecretID = receipt.events?.at(0)?.args?.secretID;
-      expect(reportedSecretID).to.equal(secretID);
-      const secret = await cassiopeia.getSecret(secretID);
-      expect(secret.unlockTime).to.equal(unlockTime);
-      expect(secret.a_i.length).to.equal(n);
-      for (let i = 0; i < n; i++) {
-        expect(secret.a_i[i][0]).to.equal(pvss_output.ciphertext.a_i[i].x);
-        expect(secret.a_i[i][1]).to.equal(pvss_output.ciphertext.a_i[i].y);
-      }
-      expect(secret.decryptedShares.length).to.equal(0);
-
-      console.log("Size of committee:", n);
-      console.log("Gas used:", receipt.gasUsed.toString())
-    };
-
     it("Should pass verification check for valid secret sharing", async () => {
-      const { all_keys, cassiopeia } = await loadFixture(deployFixture);
-      await testShareValidSecret(all_keys, cassiopeia, 0);
-      await testShareValidSecret(all_keys, cassiopeia, 1);
-      await testShareValidSecret(all_keys, cassiopeia, 2);
+      const {n, t, all_keys, cassiopeia } = await loadFixture(deployFixture);
+      console.log("Size of committee:", n);
+      const gas1 = await testShareValidSecret(n, t, all_keys, cassiopeia, 0);
+      console.log("Gas used for dealership:", gas1);
+      const gas2 = await testShareValidSecret(n, t, all_keys, cassiopeia, 1);
+      console.log("Gas used for dealership:", gas2);
     });
   });
+
+  describe("Benchmark", () => {
+    for (let n = 30; n < 120; n++) {
+      for (let t of [1, Math.floor(n / 2) + 1, n]) {
+        if (t > n) continue;
+        it(`Should work on n = ${n}, t = ${t}`, async () => {
+          const { all_keys, cassiopeia } = await deploy(n, t);
+          const gas1 = await testShareValidSecret(n, t, all_keys, cassiopeia, 0);
+          console.log(`${n},${t},${gas1}\n`);
+          const gas2 = await testShareValidSecret(n, t, all_keys, cassiopeia, 1);
+          console.log(`${n},${t},${gas2}\n`);
+        });
+      }
+    }
+  })
 });
