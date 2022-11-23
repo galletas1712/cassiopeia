@@ -14,8 +14,8 @@ pub fn distribute_secret(
 ) -> Result<(PVSSCiphertext, PVSSSecrets), PVSSError> {
     let mut rng = thread_rng();
 
-    // Secret needs to be <= 253 bits for BabyJubJub compatibility
-    let f_0 = Fr::from(rng.gen_biguint(253));
+    // Secret needs to be <= 250 bits for circom compatibility
+    let f_0 = Fr::from(rng.gen_biguint(250));
     let f = iter::once(f_0).chain((1..pvss_config.t)
         .map(|_| Fr::rand(&mut rng)))
         .collect::<Vec<_>>();
