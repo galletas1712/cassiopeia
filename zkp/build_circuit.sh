@@ -15,7 +15,7 @@ fi
 circom $ROOT/zkp/$NAME.circom --O1 --r1cs --wasm --sym --c --output "$BUILD_DIR"
 
 mkdir -p $BUILD_DIR/keys
-snarkjs powersoftau verify $PTAU_FILE
-snarkjs plonk setup $BUILD_DIR/$NAME.r1cs $PTAU_FILE $FINAL_ZKEY
-snarkjs zkey export solidityverifier $FINAL_ZKEY $ROOT/contracts/PlonkVerifier.sol
-snarkjs zkey export verificationkey $FINAL_ZKEY $BUILD_DIR/keys/verification_key.json
+npx snarkjs powersoftau verify $PTAU_FILE
+npx snarkjs plonk setup $BUILD_DIR/$NAME.r1cs $PTAU_FILE $FINAL_ZKEY
+npx snarkjs zkey export solidityverifier $FINAL_ZKEY $ROOT/contracts/PlonkVerifier.sol
+npx snarkjs zkey export verificationkey $FINAL_ZKEY $BUILD_DIR/keys/verification_key.json
