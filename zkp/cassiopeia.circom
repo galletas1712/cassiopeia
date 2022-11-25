@@ -17,9 +17,7 @@ template Cassiopeia() {
   poseidon.inputs[2] <== concat[1];
   H <== poseidon.out;
 
-  var b = 3; // B for G1 of BN254 is 3
-  var p[5] = bn254_p();
-  component bn254_multiplier = EllipticCurveScalarMultiplySignalX(51, 5, b, p);
+  component bn254_multiplier = EllipticCurveScalarMultiplySignalX(51, 5, 3, bn254_p());
 
   // Generator for BN254 is (1, 2);
   bn254_multiplier.in[0][0] <== 1;
@@ -34,6 +32,7 @@ template Cassiopeia() {
 
   var shifts[5];
   for (var i = 0; i < 5; i++) shifts[i] = 1 << (51 * i);
+
   var x_out = 0;
   var y_out = 0;
   for (var i = 0; i < 5; i++) {

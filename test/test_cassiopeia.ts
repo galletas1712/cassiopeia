@@ -7,6 +7,15 @@ import { BigNumber, Contract } from "ethers";
 import { defaultAbiCoder, keccak256 } from "ethers/lib/utils";
 import { createWriteStream, readFileSync, writeFileSync } from "fs";
 
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+interface BigInt {
+  /** Convert to BigInt to string form in JSON.stringify */
+  toJSON: () => string;
+}
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
 const snarkjs = require("snarkjs");
 const wc = require("../zkp/output/cassiopeia_js/witness_calculator");
 
@@ -71,22 +80,32 @@ const genSNARKVerifierCall = async (
     secret: BigInt(pvss_output.secrets.f_0),
     concat: [BigInt(concatHalves[0]), BigInt(concatHalves[1])],
   };
-  await wc(readFileSync(CIRCUIT_WASM)).then(async (witnessCalculator: any) => {
-    const buff = await witnessCalculator.calculateWTNSBin(input, 0);
-    writeFileSync("/tmp/witness.wtns", buff);
-  });
-  const { proof, publicSignals } = await snarkjs.plonk.prove(
-    CIRCUIT_ZKEY,
-    "/tmp/witness.wtns"
+  console.log(pvss_output.ciphertext.f_i[0]);
+  console.log(input);
+  writeFileSync("/tmp/input.json", JSON.stringify(input));
+  execFileSync("zkp/output/cassiopeia_cpp/cassiopeia", [
+    "/tmp/input.json",
+    "/tmp/witness.wtns",
+  ]);
+  console.log("Successfully generated witness");
+  execFileSync("../rapidsnark/build/prover", [
+    "zkp/output/keys/cassiopeia_final.zkey",
+    "/tmp/witness.wtns",
+    "/tmp/proof.json",
+    "/tmp/public.json",
+  ]);
+  console.log("Successfully ran prover");
+  const proof = JSON.parse(readFileSync("/tmp/proof.json").toString());
+  const publicSignals = JSON.parse(readFileSync("/tmp/public.json").toString());
+  const calldata: string = JSON.parse(
+    await snarkjs.groth16.exportSolidityCallData(proof, publicSignals)
   );
-  const calldata: string = await snarkjs.plonk.exportSolidityCallData(
-    proof,
-    publicSignals
-  );
+  console.log(calldata);
   const proofCalldata = calldata.slice(0, calldata.indexOf(","));
   const pubSignalsCalldata = JSON.parse(
     calldata.slice(calldata.indexOf(",") + 1)
   );
+  console.log(pubSignalsCalldata);
   return {
     proof,
     pubSignals: publicSignals,
@@ -104,12 +123,12 @@ describe("Cassiopeia", () => {
     );
 
   const deployFixture = async () => {
-      const n = Math.floor(Math.random() * 25) + 1;
-      const t = Math.floor(Math.random() * n) + 1; // Between 1 and n inclusive
+    const n = Math.floor(Math.random() * 25) + 1;
+    const t = Math.floor(Math.random() * n) + 1; // Between 1 and n inclusive
 
-      const result = await deploy(n, t);
-      return {n, t, all_keys: result.all_keys, cassiopeia: result.cassiopeia};
-  }
+    const result = await deploy(n, t);
+    return { n, t, all_keys: result.all_keys, cassiopeia: result.cassiopeia };
+  };
 
   const testShareValidSecret = async (
     n: number,
@@ -156,7 +175,7 @@ describe("Cassiopeia", () => {
 
   describe("Deployment", () => {
     it("Should set the right parameters at initialization", async () => {
-      const {n, t, all_keys, cassiopeia } = await loadFixture(deployFixture);
+      const { n, t, all_keys, cassiopeia } = await loadFixture(deployFixture);
       expect(await cassiopeia.n()).to.equal(n);
       expect(await cassiopeia.t()).to.equal(t);
       for (let i = 0; i < n; i++) {
@@ -172,12 +191,9 @@ describe("Cassiopeia", () => {
 
   describe("Secret sharing", () => {
     it("Should pass verification check for valid secret sharing", async () => {
-      const {n, t, all_keys, cassiopeia } = await loadFixture(deployFixture);
-      console.log("Size of committee:", n);
-      const gas1 = await testShareValidSecret(n, t, all_keys, cassiopeia, 0);
-      console.log("Gas used for dealership:", gas1);
-      const gas2 = await testShareValidSecret(n, t, all_keys, cassiopeia, 1);
-      console.log("Gas used for dealership:", gas2);
+      const { n, t, all_keys, cassiopeia } = await loadFixture(deployFixture);
+      await testShareValidSecret(n, t, all_keys, cassiopeia, 0);
+      await testShareValidSecret(n, t, all_keys, cassiopeia, 1);
     });
   });
 
@@ -187,12 +203,24 @@ describe("Cassiopeia", () => {
         if (t > n) continue;
         it(`Should work on n = ${n}, t = ${t}`, async () => {
           const { all_keys, cassiopeia } = await deploy(n, t);
-          const gas1 = await testShareValidSecret(n, t, all_keys, cassiopeia, 0);
+          const gas1 = await testShareValidSecret(
+            n,
+            t,
+            all_keys,
+            cassiopeia,
+            0
+          );
           console.log(`${n},${t},${gas1}\n`);
-          const gas2 = await testShareValidSecret(n, t, all_keys, cassiopeia, 1);
+          const gas2 = await testShareValidSecret(
+            n,
+            t,
+            all_keys,
+            cassiopeia,
+            1
+          );
           console.log(`${n},${t},${gas2}\n`);
         });
       }
     }
-  })
+  });
 });

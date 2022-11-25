@@ -4,7 +4,6 @@ pragma solidity ^0.8.17;
 import "./lib/ec/alt_bn128.sol";
 import "./lib/PVSSLib.sol";
 import "./lib/SNARKVerifyLib.sol";
-import "./PlonkVerifier.sol";
 import "hardhat/console.sol";
 
 struct Secret {
@@ -14,7 +13,7 @@ struct Secret {
 }
 
 contract Cassiopeia {
-    PlonkVerifier verifier;
+    SNARKVerifier verifier;
 
     uint256 public n;
     uint256 public t;
@@ -23,11 +22,7 @@ contract Cassiopeia {
 
     event SharedSecret(uint256 secretID);
 
-    constructor(
-        uint256 _t,
-        G2Point[] memory _pks,
-        PlonkVerifier _verifier
-    ) {
+    constructor(uint256 _t, G2Point[] memory _pks, SNARKVerifier _verifier) {
         n = _pks.length;
         require(_t <= n, "Threshold should at most the number of participants");
         t = _t;
@@ -40,18 +35,18 @@ contract Cassiopeia {
     function shareSecret(
         uint256 unlockTime,
         PVSSLib.PVSSCiphertext memory c,
-        SNARKVerifyLib.CircuitPublicSignals memory pubSignals,
-        bytes memory proof
+        uint256 H,
+        SNARKVerifyLib.Proof memory proof
     ) public returns (uint256) {
         require(
             SNARKVerifyLib.verifyProof(
                 verifier,
+                H,
+                c.f_i[0],
                 SNARKVerifyLib.genConcat(unlockTime, c),
-                pubSignals,
                 proof
             )
         );
-        // TODO: Chaum Pedersen
         PVSSLib.verifyDistribution(n, t, pks, c);
 
         // Add secret to storage
