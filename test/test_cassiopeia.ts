@@ -40,8 +40,8 @@ const deploy = async (n: number, t: number) => {
       },
     })
     .then((factory) => factory.deploy());
-  const PlonkVerifier = await ethers
-    .getContractFactory("PlonkVerifier")
+  const SNARKVerifier = await ethers
+    .getContractFactory("Verifier")
     .then((factory) => factory.deploy());
   const SNARKVerifyLib = await ethers
     .getContractFactory("SNARKVerifyLib")
@@ -53,7 +53,7 @@ const deploy = async (n: number, t: number) => {
         SNARKVerifyLib: SNARKVerifyLib.address,
       },
     })
-    .then((factory) => factory.deploy(t, all_keys.pks, PlonkVerifier.address));
+    .then((factory) => factory.deploy(t, all_keys.pks, SNARKVerifier.address));
   return { all_keys, cassiopeia: Cassiopeia };
 };
 
