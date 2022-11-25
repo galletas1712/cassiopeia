@@ -5,18 +5,18 @@ import "./PVSSLib.sol";
 
 interface SNARKVerifier {
     function verifyProof(
-        uint[2] memory a,
-        uint[2][2] memory b,
-        uint[2] memory c,
-        uint[5] memory input
+        uint256[2] memory a,
+        uint256[2][2] memory b,
+        uint256[2] memory c,
+        uint256[5] memory input
     ) external view returns (bool r);
 }
 
 library SNARKVerifyLib {
     struct Proof {
-        G1Point a;
-        G2Point b;
-        G1Point c;
+        uint256[2] a;
+        uint256[2][2] b;
+        uint256[2] c;
     }
 
     function genConcat(
@@ -51,9 +51,6 @@ library SNARKVerifyLib {
             concatHalves[0],
             concatHalves[1]
         ];
-        uint256[2] memory a = [proof.a.x, proof.a.y];
-        uint256[2][2] memory b = [proof.b.x, proof.b.y];
-        uint256[2] memory c = [proof.c.x, proof.c.y];
-        return verifier.verifyProof(a, b, c, pubSignalsConsolidated);
+        return verifier.verifyProof(proof.a, proof.b, proof.c, pubSignalsConsolidated);
     }
 }
