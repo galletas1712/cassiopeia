@@ -33,8 +33,6 @@ describe("Cassiopeia", () => {
       expect(secret.a_i[i][1]).to.equal(pvssOutput.ciphertext.a_i[i].y);
     }
     expect(secret.decryptedShares.length).to.equal(0);
-
-    return receipt.gasUsed.toString();
   };
 
   describe("Deployment", () => {
