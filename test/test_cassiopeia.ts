@@ -6,6 +6,7 @@ import { G2PointStruct } from "../typechain-types/lib/PVSSLib";
 import { BigNumber, Contract } from "ethers";
 import { defaultAbiCoder, keccak256 } from "ethers/lib/utils";
 import { createWriteStream, readFileSync, writeFileSync } from "fs";
+import { join } from "path";
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 interface BigInt {
@@ -18,11 +19,12 @@ BigInt.prototype.toJSON = function () {
 
 const snarkjs = require("snarkjs");
 
+const ROOT = "zkp/output";
 const PVSS_BIN = "pvss/target/debug/cassiopeia";
-const WITNESS_GEN_BIN = "zkp/output/cassiopeia_cpp/cassiopeia"
 const RAPIDSNARK_BINARY = "../rapidsnark/build/prover"
-const CIRCUIT_ZKEY = "zkp/output/keys/cassiopeia_final.zkey";
-const CIRCUIT_VKEY = "zkp/output/keys/verification_key.json";
+const WITNESS_GEN_BIN = join(ROOT, "cassiopeia_cpp/cassiopeia");
+const CIRCUIT_ZKEY = join(ROOT, "keys/cassiopeia_final.zkey");
+const CIRCUIT_VKEY = join(ROOT, "keys/verification_key.json");
 
 type AllKeys = { sks: [BigNumber]; pks: [G2PointStruct] };
 
@@ -185,30 +187,30 @@ describe("Cassiopeia", () => {
     });
   });
 
-  // describe("Benchmark", () => {
-  //   for (let n = 30; n < 120; n++) {
-  //     for (let t of [1, Math.floor(n / 2) + 1, n]) {
-  //       if (t > n) continue;
-  //       it(`Should work on n = ${n}, t = ${t}`, async () => {
-  //         const { all_keys, cassiopeia } = await deploy(n, t);
-  //         const gas1 = await testShareValidSecret(
-  //           n,
-  //           t,
-  //           all_keys,
-  //           cassiopeia,
-  //           0
-  //         );
-  //         console.log(`${n},${t},${gas1}\n`);
-  //         const gas2 = await testShareValidSecret(
-  //           n,
-  //           t,
-  //           all_keys,
-  //           cassiopeia,
-  //           1
-  //         );
-  //         console.log(`${n},${t},${gas2}\n`);
-  //       });
-  //     }
-  //   }
-  // });
+  describe("Benchmark", () => {
+    for (let n = 30; n < 120; n++) {
+      for (let t of [1, Math.floor(n / 2) + 1, n]) {
+        if (t > n) continue;
+        it(`Should work on n = ${n}, t = ${t}`, async () => {
+          const { all_keys, cassiopeia } = await deploy(n, t);
+          const gas1 = await testShareValidSecret(
+            n,
+            t,
+            all_keys,
+            cassiopeia,
+            0
+          );
+          console.log(`${n},${t},${gas1}\n`);
+          const gas2 = await testShareValidSecret(
+            n,
+            t,
+            all_keys,
+            cassiopeia,
+            1
+          );
+          console.log(`${n},${t},${gas2}\n`);
+        });
+      }
+    }
+  });
 });
