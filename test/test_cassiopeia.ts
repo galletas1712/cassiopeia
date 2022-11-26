@@ -188,7 +188,7 @@ describe("Cassiopeia", () => {
   });
 
   describe("Benchmark", () => {
-    for (let n = 30; n < 120; n++) {
+    for (let n = 1; n <= 53; n++) {
       for (let t of [1, Math.floor(n / 2) + 1, n]) {
         if (t > n) continue;
         it(`Should work on n = ${n}, t = ${t}`, async () => {
