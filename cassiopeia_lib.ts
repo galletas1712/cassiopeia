@@ -123,7 +123,6 @@ export const shareValidSecret = async (
   t: number,
   all_keys: AllKeys,
   cassiopeia: Contract,
-  secretID: number
 ) => {
   const pvssOutput = genValidSecret(all_keys, t);
   const unlockTime = BigNumber.from(ethers.utils.randomBytes(32));

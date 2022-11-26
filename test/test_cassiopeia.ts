@@ -20,7 +20,7 @@ describe("Cassiopeia", () => {
     cassiopeia: Contract,
     secretID: number
   ) => {
-    const { pvssOutput, unlockTime, receipt} = await shareValidSecret(n, t, all_keys, cassiopeia, secretID);
+    const { pvssOutput, unlockTime, receipt} = await shareValidSecret(n, t, all_keys, cassiopeia);
     expect(receipt.events?.length).to.equal(1);
 
     const reportedSecretID = receipt.events?.at(0)?.args?.secretID;
