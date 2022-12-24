@@ -35,7 +35,3 @@ RUN npx task buildProver
 
 RUN mkdir /workspace
 WORKDIR "/workspace"
-
-RUN npm install
-WORKDIR "/workspace/pvss"
-RUN /root/.cargo/bin/cargo build
