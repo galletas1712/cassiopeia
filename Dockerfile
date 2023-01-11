@@ -37,6 +37,8 @@ RUN git submodule update
 RUN npx task createFieldSources
 RUN npx task buildProver
 
+COPY . /workspace/cassiopeia
+
 # Build witness generator
 WORKDIR "/workspace/cassiopeia/zkp/output/cassiopeia_cpp"
 RUN make
@@ -50,3 +52,4 @@ RUN mkdir /pvss_target
 WORKDIR "/workspace/cassiopeia/pvss"
 RUN /workspace/.cargo/bin/cargo build --release --target-dir=/pvss_target
 
+WORKDIR "/workspace/cassiopeia"
