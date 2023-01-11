@@ -1,6 +1,6 @@
 import { execFileSync } from "child_process";
 import { ethers } from "hardhat";
-import { G2PointStruct } from "./typechain-types/lib/PVSSLib";
+import { G2PointStruct } from "../typechain-types/lib/PVSSLib";
 import { BigNumber, Contract } from "ethers";
 import { defaultAbiCoder, keccak256 } from "ethers/lib/utils";
 import { readFileSync, writeFileSync } from "fs";

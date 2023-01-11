@@ -11,7 +11,7 @@ import {
   deploy,
   decryptShare,
   combineShares,
-} from "../cassiopeia_lib";
+} from "./cassiopeia_lib";
 
 describe("Cassiopeia", () => {
   const deployFixture = async () => {

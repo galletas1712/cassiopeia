@@ -1,5 +1,5 @@
 import { createWriteStream } from "fs";
-import { deploy, shareValidSecret } from "../cassiopeia_lib";
+import { deploy, shareValidSecret } from "../test/cassiopeia_lib";
 
 (async function () {
   const stream = createWriteStream("benchmark.txt");
