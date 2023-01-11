@@ -11,3 +11,10 @@ artifacts
 
 MyLogFile.log
 benchmark.txt
+
+zkp/output/cassiopeia_cpp/*.o
+zkp/output/powersOfTau*
+zkp/output/keys
+zkp/output/cassiopeia.r1cs
+zkp/output/cassiopeia.sym
+zkp/output/cassiopeia_js

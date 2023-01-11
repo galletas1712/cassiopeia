@@ -12,7 +12,7 @@ if [ ! -d "$BUILD_DIR" ]; then
 fi
 
 # Build circuit
-circom $ROOT/zkp/$NAME.circom --O1 --r1cs --wasm --sym --c --output "$BUILD_DIR"
+circom $ROOT/zkp/$NAME.circom --O1 --c --output "$BUILD_DIR"
 cd $BUILD_DIR/cassiopeia_cpp
 make
 cd $ROOT

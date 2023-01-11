@@ -1,5 +1,9 @@
 FROM ubuntu:22.04
 
+RUN mkdir -p /workspace/cassiopeia
+ENV HOME /workspace
+WORKDIR "/workspace"
+
 # Nodejs deps
 RUN apt-get update && apt-get upgrade
 RUN apt-get install -y curl git
@@ -17,8 +21,8 @@ RUN apt-get install -y build-essential libgmp-dev libsodium-dev nasm nlohmann-js
 WORKDIR "/"
 RUN git clone https://github.com/iden3/circom.git
 WORKDIR "/circom"
-RUN /root/.cargo/bin/cargo build --release
-RUN /root/.cargo/bin/cargo install --path circom
+RUN /workspace/.cargo/bin/cargo build --release
+RUN /workspace/.cargo/bin/cargo install --path circom
 
 # Install snarkjs
 RUN npm install -g snarkjs
@@ -33,5 +37,16 @@ RUN git submodule update
 RUN npx task createFieldSources
 RUN npx task buildProver
 
-RUN mkdir /workspace
-WORKDIR "/workspace"
+# Build witness generator
+WORKDIR "/workspace/cassiopeia/zkp/output/cassiopeia_cpp"
+RUN make
+
+# Init npm deps
+WORKDIR "/workspace/cassiopeia"
+RUN npm install
+
+# Build PVSS
+RUN mkdir /pvss_target
+WORKDIR "/workspace/cassiopeia/pvss"
+RUN /workspace/.cargo/bin/cargo build --release --target-dir=/pvss_target
+
