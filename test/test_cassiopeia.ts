@@ -1,8 +1,17 @@
-import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import {
+  loadFixture,
+  mineUpTo,
+} from "@nomicfoundation/hardhat-network-helpers";
 import { ethers } from "hardhat";
 import { expect } from "chai";
 import { Contract } from "ethers";
-import { AllKeys, shareValidSecret, deploy } from "../cassiopeia_lib";
+import {
+  AllKeys,
+  shareValidSecret,
+  deploy,
+  decryptShare,
+  combineShares,
+} from "../cassiopeia_lib";
 
 describe("Cassiopeia", () => {
   const deployFixture = async () => {
@@ -20,7 +29,12 @@ describe("Cassiopeia", () => {
     cassiopeia: Contract,
     secretID: number
   ) => {
-    const { pvssOutput, unlockTime, receipt} = await shareValidSecret(n, t, all_keys, cassiopeia);
+    const { pvssOutput, unlockTime, receipt } = await shareValidSecret(
+      n,
+      t,
+      all_keys,
+      cassiopeia
+    );
     expect(receipt.events?.length).to.equal(1);
 
     const reportedSecretID = receipt.events?.at(0)?.args?.secretID;
@@ -56,6 +70,53 @@ describe("Cassiopeia", () => {
       const { n, t, all_keys, cassiopeia } = await loadFixture(deployFixture);
       await testShareValidSecret(n, t, all_keys, cassiopeia, 0);
       await testShareValidSecret(n, t, all_keys, cassiopeia, 1);
+    });
+
+    it("Should be able to recover secret if >= t members submit their shares and not otherwise", async () => {
+      const { n, t, all_keys, cassiopeia } = await loadFixture(deployFixture);
+      const { pvssOutput, unlockTime } = await shareValidSecret(
+        n,
+        t,
+        all_keys,
+        cassiopeia
+      );
+      // Try submitting shares but reverted
+      const decrypt0 = decryptShare(0, pvssOutput.ciphertext, all_keys.sks[0]);
+      await expect(cassiopeia.submitShare(100, 0, decrypt0)).to.be.revertedWith(
+        "Secret does not exist"
+      );
+      await expect(cassiopeia.submitShare(0, n, decrypt0)).to.be.revertedWith(
+        "Index out of bounds"
+      );
+      await expect(cassiopeia.submitShare(0, 0, decrypt0)).to.be.revertedWith(
+        "Not yet time to submit shares"
+      );
+      await mineUpTo(unlockTime);
+      for (let i = 0; i < t - 1; i++) {
+        const decryptedShare = decryptShare(
+          i,
+          pvssOutput.ciphertext,
+          all_keys.sks[i]
+        );
+        await cassiopeia.submitShare(0, i, decryptedShare);
+      }
+      // Try to decrypt secret, fail to do so
+      expect(combineShares(
+        (await cassiopeia.getSecret(0)).decryptedShares.map((share, i) => {
+          return { i, share };
+        })
+      )).to.not.deep.equal(pvssOutput.secrets.h_f_0);
+      await cassiopeia.submitShare(
+        0,
+        t - 1,
+        decryptShare(t - 1, pvssOutput.ciphertext, all_keys.sks[t - 1])
+      );
+      // Try to decrypt secret, success!
+      expect(combineShares(
+        (await cassiopeia.getSecret(0)).decryptedShares.map((share, i) => {
+          return { i, share };
+        })
+      )).to.deep.equal(pvssOutput.secrets.h_f_0);
     });
   });
 });

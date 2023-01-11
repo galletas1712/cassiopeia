@@ -17,9 +17,9 @@ BigInt.prototype.toJSON = function () {
 
 const snarkjs = require("snarkjs");
 
-const ROOT = "zkp/output";
-const PVSS_BIN = "pvss/target/debug/cassiopeia";
-const RAPIDSNARK_BINARY = "../rapidsnark/build/prover";
+const ROOT = "/workspace/cassiopeia/zkp/output";
+const PVSS_BIN = "/pvss_target/debug/cassiopeia";
+const RAPIDSNARK_BINARY = "/rapidsnark/build/prover";
 const WITNESS_GEN_BIN = join(ROOT, "cassiopeia_cpp/cassiopeia");
 const CIRCUIT_ZKEY = join(ROOT, "keys/cassiopeia_final.zkey");
 const CIRCUIT_VKEY = join(ROOT, "keys/verification_key.json");
@@ -62,6 +62,24 @@ export const genValidSecret = (all_keys: AllKeys, t: number) =>
   JSON.parse(
     execFileSync(PVSS_BIN, ["deal-secret", t.toString()], {
       input: JSON.stringify(all_keys.pks),
+    }).toString()
+  );
+
+export const decryptShare = (i: number, ciphertext: any, sk: any) =>
+  JSON.parse(
+    execFileSync(PVSS_BIN, ["decrypt-share"], {
+      input: JSON.stringify({
+        i,
+        ciphertext,
+        sk,
+      }),
+    }).toString()
+  );
+
+export const combineShares = (shares: { i: number; share: any }[]) =>
+  JSON.parse(
+    execFileSync(PVSS_BIN, ["combine-shares"], {
+      input: JSON.stringify(shares),
     }).toString()
   );
 
@@ -122,10 +140,11 @@ export const shareValidSecret = async (
   n: number,
   t: number,
   all_keys: AllKeys,
-  cassiopeia: Contract,
+  cassiopeia: Contract
 ) => {
   const pvssOutput = genValidSecret(all_keys, t);
-  const unlockTime = BigNumber.from(ethers.utils.randomBytes(32));
+  const unlockTime =
+    ethers.provider.blockNumber + Math.floor(Math.random() * 1000) + 2;
   const concatHalves = genConcat(unlockTime, pvssOutput);
   const { H, proofCalldata } = await genSNARKVerifierCall(
     pvssOutput,
