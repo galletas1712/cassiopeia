@@ -3,7 +3,7 @@ import {
   mineUpTo,
 } from "@nomicfoundation/hardhat-network-helpers";
 import { ethers } from "hardhat";
-import { expect } from "chai";
+import { expect, util } from "chai";
 import { Contract } from "ethers";
 import {
   AllKeys,
@@ -12,6 +12,15 @@ import {
   decryptShare,
   combineShares,
 } from "./cassiopeia_lib";
+
+const convertSharesOnChainToLocal = (decryptedShares: any) =>
+  decryptedShares.map((obj: any) => [
+    obj.i.toNumber(),
+    {
+      x: [obj.share.x[0].toHexString(), obj.share.x[1].toHexString()],
+      y: [obj.share.y[0].toHexString(), obj.share.y[1].toHexString()],
+    },
+  ]);
 
 describe("Cassiopeia", () => {
   const deployFixture = async () => {
@@ -62,7 +71,6 @@ describe("Cassiopeia", () => {
         expect(pk.y[1]).to.equal(all_keys.pks[i].y[1]);
       }
     });
-    // TODO: test fail deploy
   });
 
   describe("Secret sharing", () => {
@@ -101,22 +109,26 @@ describe("Cassiopeia", () => {
         await cassiopeia.submitShare(0, i, decryptedShare);
       }
       // Try to decrypt secret, fail to do so
-      expect(combineShares(
-        (await cassiopeia.getSecret(0)).decryptedShares.map((share, i) => {
-          return { i, share };
-        })
-      )).to.not.deep.equal(pvssOutput.secrets.h_f_0);
+      expect(
+        combineShares(
+          convertSharesOnChainToLocal(
+            (await cassiopeia.getSecret(0)).decryptedShares
+          )
+        )
+      ).to.not.deep.equal(pvssOutput.secrets.h_f_0);
       await cassiopeia.submitShare(
         0,
         t - 1,
         decryptShare(t - 1, pvssOutput.ciphertext, all_keys.sks[t - 1])
       );
       // Try to decrypt secret, success!
-      expect(combineShares(
-        (await cassiopeia.getSecret(0)).decryptedShares.map((share, i) => {
-          return { i, share };
-        })
-      )).to.deep.equal(pvssOutput.secrets.h_f_0);
+      expect(
+        combineShares(
+          convertSharesOnChainToLocal(
+            (await cassiopeia.getSecret(0)).decryptedShares
+          )
+        )
+      ).to.deep.equal(pvssOutput.secrets.h_f_0);
     });
   });
 });

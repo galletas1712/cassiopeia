@@ -66,7 +66,7 @@ contract Cassiopeia {
     ) public {
         require(secretID < secrets.length, "Secret does not exist");
         require(index < n, "Index out of bounds");
-        require(block.timestamp >= secrets[secretID].unlockTime);
+        require(block.number >= secrets[secretID].unlockTime, "Not yet time to submit shares");
         PVSSLib.verifyShare(secrets[secretID].a_i[index], decrypted);
 
         secrets[secretID].decryptedShares.push(

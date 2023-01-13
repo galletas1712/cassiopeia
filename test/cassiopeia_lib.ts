@@ -17,12 +17,12 @@ BigInt.prototype.toJSON = function () {
 
 const snarkjs = require("snarkjs");
 
-const ROOT = "/workspace/cassiopeia/zkp/output";
-const PVSS_BIN = "/pvss_target/debug/cassiopeia";
-const RAPIDSNARK_BINARY = "/rapidsnark/build/prover";
-const WITNESS_GEN_BIN = join(ROOT, "cassiopeia_cpp/cassiopeia");
-const CIRCUIT_ZKEY = join(ROOT, "keys/cassiopeia_final.zkey");
-const CIRCUIT_VKEY = join(ROOT, "keys/verification_key.json");
+export const ROOT = "/workspace/cassiopeia/zkp/output";
+export const PVSS_BIN = "/pvss_target/release/cassiopeia";
+export const RAPIDSNARK_BINARY = "/rapidsnark/build/prover";
+export const WITNESS_GEN_BIN = join(ROOT, "cassiopeia_cpp/cassiopeia");
+export const CIRCUIT_ZKEY = join(ROOT, "keys/cassiopeia_final.zkey");
+export const CIRCUIT_VKEY = join(ROOT, "keys/verification_key.json");
 
 export type AllKeys = { sks: [BigNumber]; pks: [G2PointStruct] };
 
@@ -76,7 +76,7 @@ export const decryptShare = (i: number, ciphertext: any, sk: any) =>
     }).toString()
   );
 
-export const combineShares = (shares: { i: number; share: any }[]) =>
+export const combineShares = (shares: any[]) =>
   JSON.parse(
     execFileSync(PVSS_BIN, ["combine-shares"], {
       input: JSON.stringify(shares),
