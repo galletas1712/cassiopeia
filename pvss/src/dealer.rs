@@ -1,18 +1,25 @@
+use std::iter;
+
 use crate::{errors::*, structs::*};
 
 use ark_ec::{AffineCurve, ProjectiveCurve};
-use ark_ff::{PrimeField, UniformRand, Zero, One};
+use ark_ff::{One, PrimeField, UniformRand, Zero};
 use rand::thread_rng;
 
 use ark_bn254::{Fr, G2Affine};
+use num_bigint::RandBigInt;
 
 pub fn distribute_secret(
     pvss_config: &PVSSConfig,
 ) -> Result<(PVSSCiphertext, PVSSSecrets), PVSSError> {
     let mut rng = thread_rng();
-    let f = (0..pvss_config.t)
-        .map(|_| Fr::rand(&mut rng))
+
+    // Secret needs to be <= 250 bits for circom compatibility
+    let f_0 = Fr::from(rng.gen_biguint(250));
+    let f = iter::once(f_0).chain((1..pvss_config.t)
+        .map(|_| Fr::rand(&mut rng)))
         .collect::<Vec<_>>();
+
     let y_eval_i = (1..=pvss_config.committee_pks.len())
         .map(|i| {
             let x = Fr::from(i as i64);
@@ -25,7 +32,7 @@ pub fn distribute_secret(
                 .fold(Fr::zero(), |acc, x| acc + x)
         })
         .collect::<Vec<_>>();
-    
+
     // NOTE: includes secret f[0] itself
     let f_i = f
         .iter()
