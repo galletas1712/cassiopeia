@@ -4,12 +4,14 @@ pragma solidity ^0.8.17;
 import "./lib/ec/alt_bn128.sol";
 import "./lib/PVSSLib.sol";
 import "./lib/SNARKVerifyLib.sol";
+import "./lib/Instance.sol";
 import "hardhat/console.sol";
 
 struct Secret {
-    uint256 unlockTime;
+    address instanceVerifier;
     G1Point[] a_i;
     PVSSLib.PVSSDecryptedShare[] decryptedShares;
+    bool claimed;
 }
 
 contract Cassiopeia {
@@ -33,7 +35,7 @@ contract Cassiopeia {
     }
 
     function shareSecret(
-        uint256 unlockTime,
+        address instanceVerifier,
         PVSSLib.PVSSCiphertext memory c,
         uint256 H,
         SNARKVerifyLib.Proof memory proof
@@ -43,7 +45,7 @@ contract Cassiopeia {
                 verifier,
                 H,
                 c.f_i[0],
-                SNARKVerifyLib.genConcat(unlockTime, c),
+                SNARKVerifyLib.genConcat(instanceVerifier, c),
                 proof
             )
         );
@@ -51,12 +53,17 @@ contract Cassiopeia {
 
         // Add secret to storage
         Secret storage secret = secrets.push();
-        secret.unlockTime = unlockTime;
+        secret.instanceVerifier = instanceVerifier;
         for (uint256 i = 0; i < c.a_i.length; i++) {
             secret.a_i.push(c.a_i[i]);
         }
         emit SharedSecret(secrets.length - 1);
         return secrets.length - 1;
+    }
+
+    function claim (uint256 secretID, bytes memory witness) public {
+        require(InstanceVerifier(secrets[secretID].instanceVerifier).verify(witness), "Witness invalid");
+        secrets[secretID].claimed = true;
     }
 
     function submitShare(
@@ -66,7 +73,7 @@ contract Cassiopeia {
     ) public {
         require(secretID < secrets.length, "Secret does not exist");
         require(index < n, "Index out of bounds");
-        require(block.number >= secrets[secretID].unlockTime, "Not yet time to submit shares");
+        require(secrets[secretID].claimed, "Not yet time to submit shares");
         PVSSLib.verifyShare(secrets[secretID].a_i[index], decrypted);
 
         secrets[secretID].decryptedShares.push(
