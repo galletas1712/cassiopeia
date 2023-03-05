@@ -2,9 +2,11 @@ import { execFileSync } from "child_process";
 import { ethers } from "hardhat";
 import { G2PointStruct } from "../typechain-types/lib/PVSSLib";
 import { BigNumber, Contract } from "ethers";
-import { defaultAbiCoder, keccak256 } from "ethers/lib/utils";
+import { defaultAbiCoder, keccak256, sha256 } from "ethers/lib/utils";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
+
+const abiEncoder = ethers.utils.defaultAbiCoder;
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 interface BigInt {
@@ -44,7 +46,7 @@ export const deploy = async (n: number, t: number) => {
   const SNARKVerifyLib = await ethers
     .getContractFactory("SNARKVerifyLib")
     .then((factory) => factory.deploy());
-  const Cassiopeia = await ethers
+  const cassiopeia = await ethers
     .getContractFactory("Cassiopeia", {
       libraries: {
         PVSSLib: PVSSLib.address,
@@ -52,7 +54,18 @@ export const deploy = async (n: number, t: number) => {
       },
     })
     .then((factory) => factory.deploy(t, all_keys.pks, SNARKVerifier.address));
-  return { all_keys, cassiopeia: Cassiopeia };
+
+  const timelockInstance = await ethers
+    .getContractFactory("TimelockVerifier")
+    .then(async (factory) =>
+      factory.deploy((await ethers.provider.getBlockNumber()) + 100)
+    );
+  const preimageInstance = await ethers
+    .getContractFactory("SHA256PreimageVerifier")
+    .then(async (factory) =>
+      factory.deploy(sha256(abiEncoder.encode(["string"], ["HI"])))
+    );
+  return { all_keys, cassiopeia, timelockInstance, preimageInstance };
 };
 
 export const genAllKeys = (n: number): AllKeys =>
@@ -83,14 +96,14 @@ export const combineShares = (shares: any[]) =>
     }).toString()
   );
 
-export const genConcat = (unlockTime: any, pvss_output: any) => {
+export const genConcat = (instanceContractAddress: any, pvss_output: any) => {
   const concat = keccak256(
     defaultAbiCoder.encode(
       [
-        "uint256",
+        "address",
         "tuple(tuple(uint256 x, uint256 y)[] f_i, tuple(uint256 x, uint256 y)[] a_i, tuple(uint256[2] x, uint256[2] y)[] y_i)",
       ],
-      [unlockTime, pvss_output.ciphertext]
+      [instanceContractAddress, pvss_output.ciphertext]
     )
   );
   const concatHalves = ["0x" + concat.slice(2, 34), "0x" + concat.slice(34)];
@@ -140,12 +153,11 @@ export const shareValidSecret = async (
   n: number,
   t: number,
   all_keys: AllKeys,
+  instanceContract: Contract,
   cassiopeia: Contract
 ) => {
   const pvssOutput = genValidSecret(all_keys, t);
-  const unlockTime =
-    ethers.provider.blockNumber + Math.floor(Math.random() * 1000) + 2;
-  const concatHalves = genConcat(unlockTime, pvssOutput);
+  const concatHalves = genConcat(instanceContract.address, pvssOutput);
   const { H, proofCalldata } = await genSNARKVerifierCall(
     pvssOutput,
     concatHalves
@@ -153,7 +165,7 @@ export const shareValidSecret = async (
 
   const receipt = await (
     await cassiopeia.shareSecret(
-      unlockTime,
+      instanceContract.address,
       pvssOutput.ciphertext,
       H,
       proofCalldata
@@ -162,7 +174,6 @@ export const shareValidSecret = async (
 
   return {
     pvssOutput,
-    unlockTime,
     concatHalves,
     H,
     proofCalldata,

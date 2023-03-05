@@ -20,10 +20,10 @@ library SNARKVerifyLib {
     }
 
     function genConcat(
-        uint256 unlockTime,
+        address instanceVerifier,
         PVSSLib.PVSSCiphertext memory c
     ) public pure returns (uint256[2] memory concatHalves) {
-        bytes32 concat = keccak256(abi.encode(unlockTime, c));
+        bytes32 concat = keccak256(abi.encode(instanceVerifier, c));
         bytes16[2] memory concatHalvesBytes = [bytes16(0), bytes16(0)];
         assembly {
             mstore(concatHalvesBytes, concat)
