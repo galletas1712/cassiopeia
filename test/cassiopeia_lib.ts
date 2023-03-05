@@ -20,7 +20,7 @@ BigInt.prototype.toJSON = function () {
 const snarkjs = require("snarkjs");
 
 export const ROOT = "/workspace/cassiopeia/zkp/output";
-export const PVSS_BIN = "pvss/target/release/cassiopeia";
+export const PVSS_BIN = "/pvss_target/release/cassiopeia";
 export const RAPIDSNARK_BINARY = "/rapidsnark/build/prover";
 export const WITNESS_GEN_BIN = join(ROOT, "cassiopeia_cpp/cassiopeia");
 export const CIRCUIT_ZKEY = join(ROOT, "keys/cassiopeia_final.zkey");
