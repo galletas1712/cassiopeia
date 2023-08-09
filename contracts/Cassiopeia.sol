@@ -19,7 +19,7 @@ contract Cassiopeia {
 
     uint256 public n;
     uint256 public t;
-    G2Point[] internal pks;
+    G2Point[] public pks;
     Secret[] internal secrets;
 
     event SharedSecret(uint256 secretID);
